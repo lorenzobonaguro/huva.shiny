@@ -1,5 +1,6 @@
+### This is the script for the interactive Shiny app for huva
 
-# setwd("~/Documents/Uni Bonn/Lab Rotations/Schultze/package/huva 0.1.4")
+#### Version in use 0.1.5
 
 library(shiny)
 library(shinydashboard) # for the appearance
@@ -17,10 +18,10 @@ library(DT)           # for the DataTables
 # create a vector containing all gene names
 ImmVar_CD4T <- rownames(huva.db$ImmVar$data$CD4T)
 ImmVar_CD14M <- rownames(huva.db$ImmVar$data$CD14M)
-classifier_PBMC1 <- rownames(huva.db$classifier$data$PBMC.1)
-classifier_PBMC2 <- rownames(huva.db$classifier$data$PBMC.2)
-classifier_PBMC3 <- rownames(huva.db$classifier$data$PBMC.3)
-FG500 <- rownames(huva.db$FG500$data$PBMC)
+classifier_PBMC1 <- rownames(huva.db$PBMC_collection$data$PBMC.1)
+classifier_PBMC2 <- rownames(huva.db$PBMC_collection$data$PBMC.2)
+classifier_PBMC3 <- rownames(huva.db$PBMC_collection$data$PBMC.3)
+FG500 <- rownames(huva.db$FG500$data$whole_blood)
 CEDAR_CD4T <- rownames(huva.db$CEDAR$data$CD4T)
 CEDAR_CD8T <- rownames(huva.db$CEDAR$data$CD8T)
 CEDAR_CD14M <- rownames(huva.db$CEDAR$data$CD14M)
@@ -50,11 +51,12 @@ signatures <- sort(signatures_unsorted)
 jsResetCode <- "shinyjs.reset = function() {history.go(0)}" 
 
 # HuVa logo
-logo <- img(src = "huva_logo_V2.png", height = 50, width = 170)
+logo <- img(src = "huva_logo.png", width = 120)
 
 
 ui <- dashboardPage(
-  # skin = "green"
+  skin = "black", 
+  
   dashboardHeader(title = logo, titleWidth = 180),
   
   dashboardSidebar(width = 180,
@@ -64,7 +66,7 @@ ui <- dashboardPage(
                      menuItem("Annotation", tabName = "tab_anno", icon = icon("chevron-right")),
                      menuItem("DE genes", tabName = "tab_de", icon = icon("chevron-right")),
                      menuItem("GSEA", tabName = "tab_gsea", icon = icon("chevron-right")),
-                     menuItem("Metadata", tabName = "tab_meta", icon = icon("chevron-right"))
+                     menuItem("Phenotype", tabName = "tab_meta", icon = icon("chevron-right"))
                    )
   ),
   
@@ -75,35 +77,33 @@ ui <- dashboardPage(
       # 1st tab
       tabItem(tabName = "tab_start",
               fluidRow(
-                column(12, helpText("The", strong("HuVa app"), "uses the variances in gene expression to compare 
-                                    2 groups – “low” and “high” – containing data from healthy individuals of 
-                                    population-scale multiomics studies binned by 1 of the 3 following conditions:")),
+                column(12, helpText("The", strong("huva Shiny app"), "uses the variances in gene expression to compare 2 groups –", strong("LOW"), 
+                                    "and", strong("HIGH"), " – containing data from healthy individuals of population-scale multi-omics 
+                                    studies binned by one of the three following conditions:")),
                 column(10, offset = 1, 
-                       helpText("1)", strong("Gene of interest:"), "find individuals with “low” or “high” expression 
-                                of this gene"),
-                       helpText("2)", strong("Phenotype of interest:"), "find individuals with “low” or “high” values 
-                                of that phenotype, e.g. # of monocytes in blood")),
-                column(8, offset = 2, 
-                       helpText("- find the 2 groups with ”low” and ”high” # of monocytes"),
-                       helpText("- analyse the difference between these 2 groups at gene expression level")),
+                       helpText("1)", strong("GOI"), ": find individuals with", strong("LOW"), "or", strong("HIGH"), 
+                                "expression of a Gene Of Interest (", strong("GOI experiment"), ")"),
+                       helpText("2)", strong("POI"), ": find individuals with", strong("LOW"), "or", strong("HIGH"), 
+                                "values of a Phenotype Of Interest (", strong("POI experiment"), ")"), 
+                       helpText("3)", strong("SOI"), ": find individuals with", strong("LOW"), "or", strong("HIGH"), 
+                                "enrichment of a Signature Of Interest (", strong("SOI experiment"), ")")),
                 column(10, offset = 1, 
-                       helpText("3)", strong("Signature of interest:"), "a selected gene set will be used to 
-                                stratify the individuals into the 2 groups."),
+                       helpText("For detailed description of the huva framework please refer to (", em("link to paper"), ") and (", em("link to gitlab"), ")."),
                        br(), br())
               ), 
               
               fluidRow(
                 column(5, offset = 1,
                        box(width = NULL, status = "primary",
-                           selectInput("select", "Select:",
+                           selectInput("select", "Select the type of experiment:",
                                        choices = c("", Gene = "goi", Phenotype = "poi", Signature = "soi")),
                            conditionalPanel(condition = "input.select == 'goi'",
                                             selectInput("select_goi", "Gene of interest:", 
                                                         c('Select or type' = "", genes))
                            ),
                            conditionalPanel(condition = "input.select == 'poi'",
-                                            selectInput("select_meta", "Select Phenotype:",
-                                                        c('Select or type' = "", Cellcount = "cellcount", Cytokines = "cytokines")),
+                                            selectInput("select_meta", "Phenotype of interest:",
+                                                        c('Select or type' = "", 'Cell count' = "cellcount", Cytokines = "cytokines")),
                                             conditionalPanel(condition = "input.select_meta != ''",
                                                              selectInput("select_poi", "of:", 
                                                                          c('Select or type' = "", phenotype_cellcount)))
@@ -114,7 +114,7 @@ ui <- dashboardPage(
                 ),
                 column(4, offset = 1,
                        box(title = icon("cog"), width = NULL, 
-                           selectInput("select_adjust.method", "Select an adjust method (optional):",
+                           selectInput("select_adjust.method", "Select a p value adjustment method:",
                                        choices = c('No adjustment' = "none", 'Benjamini & Hochberg' = "BH", 
                                                    'Benjamini & Yekutieli' ="BY", 'Holm' ="holm")),
                            sliderInput("quantile", "Quantile", 
@@ -138,8 +138,10 @@ ui <- dashboardPage(
                                                                       class = "coral")),
                                                   column(12,
                                                          br(),
+                                                         helpText(strong("You can now start browsing the results of the huva experiment via the menu bar on the left.")),
+                                                         br(),
                                                          helpText(em("Before rerunning the app with a new gene/phenotype/signature of 
-                                                                     interest and/or different settings, hit the"), "RESET", em("button.")))))
+                                                                     interest and/or different settings, hit the"), strong("Reset App"), em("button.")))))
               )
       ),
       #2nd tab
@@ -154,7 +156,7 @@ ui <- dashboardPage(
                                                 fluidRow(
                                                   column(5, offset = 1, 
                                                          selectInput("select_study", "Select a study:",
-                                                                     choices = c("CEDAR", "classifier", "FG500","ImmVar")),
+                                                                     choices = c("CEDAR", "PBMC_collection", "FG500","ImmVar")),
                                                          selectInput("select_dataset", "Select a cell type:",
                                                                      choices = "")
                                                          # select_dataset will be updated (coded in server) depending on what is selected in select_study
@@ -183,7 +185,7 @@ ui <- dashboardPage(
                                                                               conditionalPanel(condition = "input.go > 0",
                                                                                                helpText(em("Add more genes to visualize the expression levels 
                                                                                                            of the respective genes within the newly generated 
-                                                                                                           2 groups – “low” and “high”.")),
+                                                                                                           2 groups – LOW and HIGH.")),
                                                                                                helpText(em("After selecting the genes to be displayed in the plot, 
                                                                                                            press the"), "Update", em("button."))
                                                                               )
@@ -222,7 +224,7 @@ ui <- dashboardPage(
                                                 fluidRow(
                                                   column(5, offset = 1,
                                                          selectInput("t3_select_study", "Select a study:",
-                                                                     choices = c("CEDAR", "classifier", "FG500", "ImmVar")),
+                                                                     choices = c("CEDAR", "PBMC_collection", "FG500", "ImmVar")),
                                                          selectInput("t3_select_dataset", "Select a cell type:",
                                                                      choices = "")),
                                                   column(6,
@@ -285,7 +287,7 @@ ui <- dashboardPage(
                                                 fluidRow(
                                                   column(5, offset = 1,
                                                          selectInput("t4_select_study", "Select a study:",
-                                                                     choices = c("CEDAR", "classifier", "FG500", "ImmVar")),
+                                                                     choices = c("CEDAR", "PBMC_collection", "FG500", "ImmVar")),
                                                          selectInput("t4_select_dataset", "Select a cell type:",
                                                                      choices = "")),
                                                   column(6,
@@ -330,7 +332,7 @@ ui <- dashboardPage(
                                  conditionalPanel(condition = "input.select != 'poi'",
                                                   column(5, offset = 1,
                                                          selectInput("t5_select_study", "Select a study:",
-                                                                     choices = c("CEDAR", "classifier", "FG500", "ImmVar")),
+                                                                     choices = c("CEDAR", "PBMC_collection", "FG500", "ImmVar")),
                                                          selectInput("t5_select_dataset", "Select a cell type:",
                                                                      choices = ""))),
                                  column(6,
@@ -401,8 +403,8 @@ ui <- dashboardPage(
                                         conditionalPanel(condition = "input.select != 'poi'",
                                                          selectInput("t6_select_study", "Select a study:",
                                                                      choices = c("CEDAR", "FG500"))), #"classifier" & "ImmVar" have no metadata
-                                        selectInput("t6_select_metadata", "Select:",
-                                                    choices = c(Cellcount = "FG500_PBMC_cellcount", Cytokines = "FG500_PBMC_cytokines"))),
+                                        selectInput("t6_select_metadata", "Select the phenotype:",
+                                                    choices = c(Cellcount = "FG500_whole_blood_cellcount", Cytokines = "FG500_whole_blood_cytokines"))),
                                  column(6,
                                         conditionalPanel(condition = "input.select != 'poi'",
                                                          selectInput("t6_select_dataset", "Select a cell type:",
@@ -477,13 +479,13 @@ server <- function(input, output, session) {
           huva_dataset <- names(binned_dataset$CEDAR$data)
           updateSelectInput(session, "select_dataset",
                             choices = sort(huva_dataset))
-        } else if (input$select_study == "classifier"){
-          huva_dataset <- names(binned_dataset$classifier$data)
+        } else if (input$select_study == "PBMC_collection"){
+          huva_dataset <- names(binned_dataset$PBMC_collection$data)
           updateSelectInput(session, "select_dataset",
                             choices = sort(huva_dataset))
         } else if (input$select_study == "FG500"){      #don't exchange w/ huva_dataset, as there is only FG500_PBMC in FG500
           updateSelectInput(session, "select_dataset",
-                            choices = c(PBMC = "FG500_PBMC"))
+                            choices = c(whole_blood = "FG500_whole_blood"))
         } else if (input$select_study == "ImmVar"){
           huva_dataset <- names(binned_dataset$ImmVar$data)
           updateSelectInput(session, "select_dataset",
@@ -499,13 +501,13 @@ server <- function(input, output, session) {
           huva_dataset <- names(binned_dataset$CEDAR$data)
           updateSelectInput(session, "t3_select_dataset",
                             choices = sort(huva_dataset))
-        } else if (input$t3_select_study == "classifier"){
-          huva_dataset <- names(binned_dataset$classifier$data)
+        } else if (input$t3_select_study == "PBMC_collection"){
+          huva_dataset <- names(binned_dataset$PBMC_collection$data)
           updateSelectInput(session, "t3_select_dataset",
                             choices = sort(huva_dataset))
         } else if (input$t3_select_study == "FG500"){      #don't exchange w/ huva_dataset, as there is only FG500_PBMC in FG500
           updateSelectInput(session, "t3_select_dataset",
-                            choices = c(PBMC = "FG500_PBMC"))
+                            choices = c(whole_blood = "FG500_whole_blood"))
         } else if (input$t3_select_study == "ImmVar"){
           huva_dataset <- names(binned_dataset$ImmVar$data)
           updateSelectInput(session, "t3_select_dataset",
@@ -521,13 +523,13 @@ server <- function(input, output, session) {
           huva_dataset <- names(binned_dataset$CEDAR$data)
           updateSelectInput(session, "t4_select_dataset",
                             choices = sort(huva_dataset))
-        } else if (input$t4_select_study == "classifier"){
-          huva_dataset <- names(binned_dataset$classifier$data)
+        } else if (input$t4_select_study == "PBMC_collection"){
+          huva_dataset <- names(binned_dataset$PBMC_collection$data)
           updateSelectInput(session, "t4_select_dataset",
                             choices = sort(huva_dataset))
         } else if (input$t4_select_study == "FG500"){      #don't exchange w/ huva_dataset, as there is only FG500_PBMC in FG500
           updateSelectInput(session, "t4_select_dataset",
-                            choices = c(PBMC = "FG500_PBMC"))
+                            choices = c(whole_blood = "FG500_whole_blood"))
         } else if (input$t4_select_study == "ImmVar"){
           huva_dataset <- names(binned_dataset$ImmVar$data)
           updateSelectInput(session, "t4_select_dataset",
@@ -543,13 +545,13 @@ server <- function(input, output, session) {
           huva_dataset <- names(binned_dataset$CEDAR$data)
           updateSelectInput(session, "t5_select_dataset",
                             choices = sort(huva_dataset))
-        } else if (input$t5_select_study == "classifier"){
-          huva_dataset <- names(binned_dataset$classifier$data)
+        } else if (input$t5_select_study == "PBMC_collection"){
+          huva_dataset <- names(binned_dataset$PBMC_collection$data)
           updateSelectInput(session, "t5_select_dataset",
                             choices = sort(huva_dataset))
         } else if (input$t5_select_study == "FG500"){      #don't exchange w/ huva_dataset, as there is only FG500_PBMC in FG500
           updateSelectInput(session, "t5_select_dataset",
-                            choices = c(PBMC = "FG500_PBMC"))
+                            choices = c(whole_blood = "FG500_whole_blood"))
         } else if (input$t5_select_study == "ImmVar"){
           huva_dataset <- names(binned_dataset$ImmVar$data)
           updateSelectInput(session, "t5_select_dataset",
@@ -558,7 +560,7 @@ server <- function(input, output, session) {
       })
       # 6th tab
         # here: classifier & ImmVar have no metadata --> exclude them here
-      studies2 <- studies[studies != "classifier"]
+      studies2 <- studies[studies != "PBMC_collection"]
       studies3 <- studies2[studies2 != "ImmVar"]
       updateSelectInput(session, "t6_select_study",
                         choices = sort(studies3))
@@ -570,7 +572,7 @@ server <- function(input, output, session) {
                             choices = sort(huva_dataset))
         } else if (input$t6_select_study == "FG500"){      #don't exchange w/ huva_dataset, as there is only FG500_PBMC in FG500
           updateSelectInput(session, "t6_select_dataset",
-                            choices = c(PBMC = "FG500_PBMC"))
+                            choices = c(whole_blood = "FG500_whole_blood"))
         }
       })
       observe({
@@ -580,7 +582,7 @@ server <- function(input, output, session) {
                             choices = "Cellcount")
         } else if (input$t6_select_study == "FG500"){
           updateSelectInput(session, "t6_select_metadata",
-                            choices = c(Cellcount = "FG500_PBMC_cellcount", Cytokines = "FG500_PBMC_cytokines"))
+                            choices = c(Cellcount = "FG500_whole_blood_cellcount", Cytokines = "FG500_whole_blood_cytokines"))
         }
       })
     } 
@@ -595,7 +597,7 @@ server <- function(input, output, session) {
                                            gs_list = hallmarks_V7.2)
       # 2nd tab - Expression POI 
       expr_huva <- get_expr_huva(huva_exp = binned_dataset, 
-                                 study = "FG500", dataset = "FG500_PBMC")
+                                 study = "FG500", dataset = "FG500_whole_blood")
       output$expr_table = DT::renderDataTable(expr_huva, options = list(scrollX = T))
         # add selectInput to enable adding more genes to the boxplot 
       output$more_genes_poi_UI <- renderUI({
@@ -614,12 +616,12 @@ server <- function(input, output, session) {
         plot_binned <- plot_binned_gene(goi = input$more_genes_poi, 
                                         huva_experiment = binned_dataset)
         output$expr_plot <- renderPlot(
-          plot_binned$FG500_PBMC
+          plot_binned$FG500_whole_blood
         )
       })
       
       # 3rd tab - Annotation POI 
-      anno_huva <- get_anno_huva(huva_exp = binned_dataset, study = "FG500", "FG500_PBMC")
+      anno_huva <- get_anno_huva(huva_exp = binned_dataset, study = "FG500", "FG500_whole_blood")
       
       output$anno_table_poi = DT::renderDataTable(anno_huva, options = list(scrollX = T))
       
@@ -631,7 +633,7 @@ server <- function(input, output, session) {
         # generate the plot 
       anno.plot <- get_anno.plot_huva(huva_exp = binned_dataset, study = "FG500")
       output$anno_plot_poi <- renderPlot(
-        anno.plot[["FG500_PBMC"]][input$t3_plot_select_anno_poi]
+        anno.plot[["FG500_whole_blood"]][input$t3_plot_select_anno_poi]
       )
         # add a SelectInput for statistics for the annotation parameters
       output$t3_stat_select_anno_poi_UI <- renderUI({
@@ -640,7 +642,7 @@ server <- function(input, output, session) {
       })
       anno.stat <- get_anno.stat_huva(huva_exp = binned_dataset, study = "FG500")
       output$anno_stat_poi <- renderTable({
-        anno.stat[["FG500_PBMC"]][input$t3_stat_select_anno_poi]},
+        anno.stat[["FG500_whole_blood"]][input$t3_stat_select_anno_poi]},
         striped = TRUE, hover = TRUE
       )
       
@@ -648,18 +650,18 @@ server <- function(input, output, session) {
       DE_huva <- get_DE_huva(huva_exp = binned_dataset, 
                              study = "FG500", 
                              cluster_col = F, 
-                             dataset = "FG500_PBMC")
+                             dataset = "FG500_whole_blood")
         # PCA
       output$de_pca <- renderPlot(
-        DE_huva["PCA_FG500_PBMC"]) 
+        DE_huva["PCA_FG500_whole_blood"]) 
         # plot
       output$de_plot <- renderPlot(
-        DE_huva["plot_FG500_PBMC"])
+        DE_huva["plot_FG500_whole_blood"])
         # HM
       output$de_hm <- renderPlot(
-        plot_HM(DE_huva$HM_FG500_PBMC))
+        plot_HM(DE_huva$HM_FG500_whole_blood))
         # statistics
-      output$de_stat = DT::renderDataTable(DE_huva$FG500_PBMC, options = list(scrollX = T))
+      output$de_stat = DT::renderDataTable(DE_huva$FG500_whole_blood, options = list(scrollX = T))
       
       # 5th tab & 6th tab
        # have a go button --> will be implemented further down, where GOI & SOI are coded as well
@@ -686,13 +688,13 @@ server <- function(input, output, session) {
           huva_dataset <- names(binned_dataset$CEDAR$data)
           updateSelectInput(session, "select_dataset",
                             choices = sort(huva_dataset))
-        } else if (input$select_study == "classifier"){
-          huva_dataset <- names(binned_dataset$classifier$data)
+        } else if (input$select_study == "PBMC_collection"){
+          huva_dataset <- names(binned_dataset$PBMC_collection$data)
           updateSelectInput(session, "select_dataset",
                             choices = sort(huva_dataset))
         } else if (input$select_study == "FG500"){      #don't exchange w/ huva_dataset, as there is only FG500_PBMC in FG500
           updateSelectInput(session, "select_dataset",
-                            choices = c(PBMC = "FG500_PBMC"))
+                            choices = c(whole_blood = "FG500_whole_blood"))
         } else if (input$select_study == "ImmVar"){
           huva_dataset <- names(binned_dataset$ImmVar$data)
           updateSelectInput(session, "select_dataset",
@@ -708,13 +710,13 @@ server <- function(input, output, session) {
           huva_dataset <- names(binned_dataset$CEDAR$data)
           updateSelectInput(session, "t3_select_dataset",
                             choices = sort(huva_dataset))
-        } else if (input$t3_select_study == "classifier"){
-          huva_dataset <- names(binned_dataset$classifier$data)
+        } else if (input$t3_select_study == "PBMC_collection"){
+          huva_dataset <- names(binned_dataset$PBMC_collection$data)
           updateSelectInput(session, "t3_select_dataset",
                             choices = sort(huva_dataset))
         } else if (input$t3_select_study == "FG500"){      #don't exchange w/ huva_dataset, as there is only FG500_PBMC in FG500
           updateSelectInput(session, "t3_select_dataset",
-                            choices = c(PBMC = "FG500_PBMC"))
+                            choices = c(whole_blood = "FG500_whole_blood"))
         } else if (input$t3_select_study == "ImmVar"){
           huva_dataset <- names(binned_dataset$ImmVar$data)
           updateSelectInput(session, "t3_select_dataset",
@@ -730,13 +732,13 @@ server <- function(input, output, session) {
           huva_dataset <- names(binned_dataset$CEDAR$data)
           updateSelectInput(session, "t4_select_dataset",
                             choices = sort(huva_dataset))
-        } else if (input$t4_select_study == "classifier"){
-          huva_dataset <- names(binned_dataset$classifier$data)
+        } else if (input$t4_select_study == "PBMC_collection"){
+          huva_dataset <- names(binned_dataset$PBMC_collection$data)
           updateSelectInput(session, "t4_select_dataset",
                             choices = sort(huva_dataset))
         } else if (input$t4_select_study == "FG500"){      #don't exchange w/ huva_dataset, as there is only FG500_PBMC in FG500
           updateSelectInput(session, "t4_select_dataset",
-                            choices = c(PBMC = "FG500_PBMC"))
+                            choices = c(whole_blood = "FG500_whole_blood"))
         } else if (input$t4_select_study == "ImmVar"){
           huva_dataset <- names(binned_dataset$ImmVar$data)
           updateSelectInput(session, "t4_select_dataset",
@@ -752,13 +754,13 @@ server <- function(input, output, session) {
           huva_dataset <- names(binned_dataset$CEDAR$data)
           updateSelectInput(session, "t5_select_dataset",
                             choices = sort(huva_dataset))
-        } else if (input$t5_select_study == "classifier"){
-          huva_dataset <- names(binned_dataset$classifier$data)
+        } else if (input$t5_select_study == "PBMC_collection"){
+          huva_dataset <- names(binned_dataset$PBMC_collection$data)
           updateSelectInput(session, "t5_select_dataset",
                             choices = sort(huva_dataset))
         } else if (input$t5_select_study == "FG500"){      #don't exchange w/ huva_dataset, as there is only FG500_PBMC in FG500
           updateSelectInput(session, "t5_select_dataset",
-                            choices = c(PBMC = "FG500_PBMC"))
+                            choices = c(whole_blood = "FG500_whole_blood"))
         } else if (input$t5_select_study == "ImmVar"){
           huva_dataset <- names(binned_dataset$ImmVar$data)
           updateSelectInput(session, "t5_select_dataset",
@@ -766,8 +768,8 @@ server <- function(input, output, session) {
         }
       })
       # 6th tab
-        # here: classifier & ImmVar have no metadata --> exclude them here
-      studies2 <- studies[studies != "classifier"]
+        # here: PBMC_collection & ImmVar have no metadata --> exclude them here
+      studies2 <- studies[studies != "PBMC_collection"]
       studies3 <- studies2[studies2 != "ImmVar"]
       updateSelectInput(session, "t6_select_study",
                         choices = sort(studies3))
@@ -779,7 +781,7 @@ server <- function(input, output, session) {
                             choices = sort(huva_dataset))
         } else if (input$t6_select_study == "FG500"){      #don't exchange w/ huva_dataset, as there is only FG500_PBMC in FG500
           updateSelectInput(session, "t6_select_dataset",
-                            choices = c(PBMC = "FG500_PBMC"))
+                            choices = c(whole_blood = "FG500_whole_blood"))
         }
       })
       observe({
@@ -789,7 +791,7 @@ server <- function(input, output, session) {
                             choices = "Cellcount")
         } else if (input$t6_select_study == "FG500"){
           updateSelectInput(session, "t6_select_metadata",
-                            choices = c(Cellcount = "FG500_PBMC_cellcount", Cytokines = "FG500_PBMC_cytokines"))
+                            choices = c(Cellcount = "FG500_whole_blood_cellcount", Cytokines = "FG500_whole_blood_cytokines"))
         }
       })
     }
@@ -951,10 +953,10 @@ server <- function(input, output, session) {
                                         n_top_genes = input$top_genes_list)
         # Plot of Ranked gene list
         output$gsea_plot <- renderPlot(
-          rank_huva_plot$plot_FG500_PBMC)
+          rank_huva_plot$plot_FG500_whole_blood)
         # Ranked gene list
         output$gsea_ranked_list <- renderTable({
-          rank_huva_list$FG500_PBMC},
+          rank_huva_list$FG500_whole_blood},
           striped = TRUE, rownames = TRUE, hover = TRUE
         )
         gsea_huva <- get_gsea_huva(huva_exp = binned_dataset, 
@@ -962,13 +964,13 @@ server <- function(input, output, session) {
         # GSEA Volcano plot
         if(input$interactive_volcano){            
           output$gsea_int_volcano <- renderPlotly(
-            gsea_huva$int_plot_FG500_PBMC
+            gsea_huva$int_plot_FG500_whole_blood
           )} else {
             output$gsea_volcano <- renderPlot(
-              gsea_huva$plot_FG500_PBMC)
+              gsea_huva$plot_FG500_whole_blood)
           }
         # GSEA table
-        output$gsea_table = DT::renderDataTable(gsea_huva$FG500_PBMC, options = list(scrollX = T))
+        output$gsea_table = DT::renderDataTable(gsea_huva$FG500_whole_blood, options = list(scrollX = T))
       }
     })
     
@@ -1010,7 +1012,7 @@ server <- function(input, output, session) {
       # plot 
         # add a selectInput for selecting metadata (cell, cytokines, bmi, ...)
       output$t6_select_metadata1_UI <- renderUI({
-        selectInput("t6_select_metadata1", "Select the metadata:",
+        selectInput("t6_select_metadata1", "Select the parameter:",
                     choices = c('Select or type' = "", names(meta.plot[[meta1]])[-1]))
       })
       output$meta_plot <- renderPlot(

@@ -1,0 +1,8 @@
+huva R package - changelog
+
+0.1.4 <-
+	- Initial version of the huva.shiny app
+
+0.1.5 <-
+	- Adaptation of the app to the structure of the now dataset (FG500 whole blood and PBMC_collection instead of classifier)
+	- Small changes in text and description of the different panels
